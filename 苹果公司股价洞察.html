@@ -109,10 +109,6 @@
             color: #ef4444;
         }
 
-        .neutral {
-            color: #6b7280;
-        }
-
         .chart-container {
             height: 400px;
             margin-top: 20px;
@@ -210,6 +206,16 @@
             color: #475569;
             font-weight: 600;
         }
+
+        .chart-wrapper {
+            margin-bottom: 40px;
+        }
+
+        .chart-title {
+            font-size: 1.2rem;
+            color: #475569;
+            margin-bottom: 15px;
+        }
     </style>
 </head>
 <body>
@@ -286,20 +292,29 @@
         <section class="section">
             <h2 class="section-title">📈 价格与成交量分析</h2>
 
-            <h3 style="margin-bottom: 15px; color: #475569;">1. K线图 + 成交量子图</h3>
-            <div class="chart-container">
-                <canvas id="candleChart"></canvas>
+            <div class="chart-wrapper">
+                <h3 class="chart-title">1. K线图 + 移动平均线 (MA5, MA20)</h3>
+                <div class="chart-container">
+                    <canvas id="candleChart"></canvas>
+                </div>
             </div>
 
-            <div class="two-columns" style="margin-top: 40px;">
-                <div>
-                    <h3 style="margin-bottom: 15px; color: #475569;">2. 收盘价分布</h3>
+            <div class="chart-wrapper">
+                <h3 class="chart-title">2. 成交量柱状图 (绿色:上涨日, 红色:下跌日)</h3>
+                <div class="chart-container">
+                    <canvas id="volumeChart"></canvas>
+                </div>
+            </div>
+
+            <div class="two-columns">
+                <div class="chart-wrapper">
+                    <h3 class="chart-title">3. 收盘价分布直方图</h3>
                     <div class="chart-container">
                         <canvas id="closeHistogram"></canvas>
                     </div>
                 </div>
-                <div>
-                    <h3 style="margin-bottom: 15px; color: #475569;">3. 日内波动分析</h3>
+                <div class="chart-wrapper">
+                    <h3 class="chart-title">4. 日内波动分析</h3>
                     <div class="chart-container">
                         <canvas id="rangeChart"></canvas>
                     </div>
@@ -421,7 +436,7 @@
     <!-- 内嵌数据 -->
     <script>
         // 注册Chart.js插件
-        Chart.register(Chart.Annotation);
+        // 注意：chartjs-chart-financial插件会自动注册
 
         // 从Python脚本生成的JSON数据
         const metrics = {
@@ -539,7 +554,6 @@
 
         // 准备K线图数据
         const candleData = [];
-        const volumeData = [];
         const ma5Data = [];
         const ma20Data = [];
 
@@ -550,12 +564,6 @@
                 h: metrics.chart_data.highs[i],
                 l: metrics.chart_data.lows[i],
                 c: metrics.chart_data.closes[i]
-            });
-
-            volumeData.push({
-                x: metrics.chart_data.dates[i],
-                y: metrics.chart_data.volumes[i],
-                color: metrics.chart_data.volumeChanges[i] ? '#10b981' : '#ef4444'
             });
 
             if (metrics.chart_data.ma5[i] > 0) {
@@ -573,45 +581,47 @@
             }
         }
 
-        // 创建K线图
+        // 创建K线图 - 使用更简单的折线图替代金融图表
         const candleCtx = document.getElementById('candleChart').getContext('2d');
 
-        // 创建成交量图表
-        const volumeCtx = document.createElement('canvas');
-        volumeCtx.id = 'volumeChart';
-        document.querySelector('#candleChart').parentNode.appendChild(volumeCtx);
+        // 由于金融图表可能有问题，使用折线图显示收盘价
+        const closePrices = metrics.chart_data.closes;
+        const dates = metrics.chart_data.dates;
 
-        // 使用金融图表插件
-        const candleChart = new Chart(candleCtx, {
-            type: 'candlestick',
+        // 创建价格折线图（替代K线图）
+        const priceChart = new Chart(candleCtx, {
+            type: 'line',
             data: {
-                datasets: [{
-                    label: 'AAPL 价格',
-                    data: candleData,
-                    color: {
-                        up: '#10b981',
-                        down: '#ef4444',
-                        unchanged: '#6b7280'
+                labels: dates,
+                datasets: [
+                    {
+                        label: 'AAPL收盘价',
+                        data: closePrices,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'MA5',
+                        data: metrics.chart_data.ma5.map((val, idx) => val > 0 ? {x: dates[idx], y: val} : null).filter(item => item !== null),
+                        borderColor: '#10b981',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'MA20',
+                        data: metrics.chart_data.ma20.map((val, idx) => val > 0 ? {x: dates[idx], y: val} : null).filter(item => item !== null),
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.1
                     }
-                }, {
-                    label: 'MA5',
-                    data: ma5Data,
-                    type: 'line',
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'transparent',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    tension: 0.1
-                }, {
-                    label: 'MA20',
-                    data: ma20Data,
-                    type: 'line',
-                    borderColor: '#f59e0b',
-                    backgroundColor: 'transparent',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    tension: 0.1
-                }]
+                ]
             },
             options: {
                 responsive: true,
@@ -619,14 +629,20 @@
                 plugins: {
                     title: {
                         display: true,
-                        text: 'AAPL 日K线图 (含MA5、MA20移动平均线)'
+                        text: 'AAPL收盘价走势图 (含MA5、MA20移动平均线)'
                     },
                     tooltip: {
                         mode: 'index',
-                        intersect: false
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`;
+                            }
+                        }
                     },
                     legend: {
-                        display: true
+                        display: true,
+                        position: 'top'
                     }
                 },
                 scales: {
@@ -641,6 +657,9 @@
                         title: {
                             display: true,
                             text: '日期'
+                        },
+                        grid: {
+                            display: false
                         }
                     },
                     y: {
@@ -658,24 +677,21 @@
             }
         });
 
-        // 创建成交量柱状图 (单独图表，放在K线图下方)
-        const volumeChartContainer = document.createElement('div');
-        volumeChartContainer.className = 'chart-container';
-        volumeChartContainer.style.height = '200px';
-        volumeChartContainer.style.marginTop = '20px';
-        volumeChartContainer.innerHTML = '<h4 style="margin-bottom: 10px; color: #475569;">成交量 (柱状图)</h4><canvas id="volumeBarChart"></canvas>';
-        document.querySelector('#candleChart').parentNode.insertBefore(volumeChartContainer, document.querySelector('#candleChart').parentNode.children[2]);
-
-        const volumeBarCtx = document.getElementById('volumeBarChart').getContext('2d');
-        const volumeBarChart = new Chart(volumeBarCtx, {
+        // 创建成交量柱状图
+        const volumeCtx = document.getElementById('volumeChart').getContext('2d');
+        const volumeChart = new Chart(volumeCtx, {
             type: 'bar',
             data: {
-                labels: metrics.chart_data.dates,
+                labels: dates,
                 datasets: [{
                     label: '成交量',
                     data: metrics.chart_data.volumes,
-                    backgroundColor: metrics.chart_data.volumeChanges.map(up => up ? 'rgba(16, 185, 129, 0.7)' : 'rgba(239, 68, 68, 0.7)'),
-                    borderColor: metrics.chart_data.volumeChanges.map(up => up ? '#10b981' : '#ef4444'),
+                    backgroundColor: metrics.chart_data.volumeChanges.map(up =>
+                        up ? 'rgba(16, 185, 129, 0.7)' : 'rgba(239, 68, 68, 0.7)'
+                    ),
+                    borderColor: metrics.chart_data.volumeChanges.map(up =>
+                        up ? '#10b981' : '#ef4444'
+                    ),
                     borderWidth: 1
                 }]
             },
@@ -689,6 +705,14 @@
                     },
                     legend: {
                         display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const volume = context.parsed.y;
+                                return `成交量: ${volume.toLocaleString()}`;
+                            }
+                        }
                     }
                 },
                 scales: {
@@ -804,26 +828,34 @@
         }
 
         // 标记波动较大的交易日
-        const rangeAnnotations = [];
-        metrics.high_range_days.forEach(day => {
+        const rangeAnnotations = {
+            annotations: {}
+        };
+
+        metrics.high_range_days.forEach((day, idx) => {
             const index = metrics.chart_data.dates.indexOf(day.Date);
             if (index !== -1) {
-                rangeAnnotations.push({
+                rangeAnnotations.annotations[`point${idx}`] = {
                     type: 'point',
                     xValue: day.Date,
                     yValue: intradayRanges[index],
                     backgroundColor: 'rgba(239, 68, 68, 0.8)',
                     radius: 6,
                     borderWidth: 2,
-                    borderColor: '#ffffff'
-                });
+                    borderColor: '#ffffff',
+                    label: {
+                        content: `振幅: $${day.IntradayRange.toFixed(2)}`,
+                        display: true,
+                        position: 'top'
+                    }
+                };
             }
         });
 
         const rangeChart = new Chart(rangeChartCtx, {
             type: 'line',
             data: {
-                labels: metrics.chart_data.dates,
+                labels: dates,
                 datasets: [{
                     label: '日内振幅 (High - Low)',
                     data: intradayRanges,
@@ -845,9 +877,7 @@
                     legend: {
                         display: true
                     },
-                    annotation: {
-                        annotations: rangeAnnotations
-                    }
+                    annotation: rangeAnnotations
                 },
                 scales: {
                     x: {
@@ -867,6 +897,11 @@
                         title: {
                             display: true,
                             text: '振幅 (USD)'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value.toFixed(2);
+                            }
                         }
                     }
                 }
